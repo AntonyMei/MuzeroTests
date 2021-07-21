@@ -91,7 +91,7 @@ def start_server():
     """
     Start server, run this in a separate process
     """
-    buffer = MyBuffer(memory_size=2048 * 1024 * 1024, block_size=256 * 1024 * 1024)
+    buffer = MyBuffer(memory_size=128 * 1024 * 1024, block_size=64 * 1024 * 1024)
     MyBufferManager.register('get_buffer', callable=lambda: buffer)
     print('server registered')
     manager = MyBufferManager(address=('localhost', 12333), authkey=b'antony')
@@ -135,6 +135,7 @@ def read_test(idx):
     """
     For tests call this in a separate process, idx start from 0
     TODO: add reader-writer lock to avoid accidents
+    TODO: resolve potential conflicts caused by delete
     """
 
     # connect to server and get buffer
@@ -162,8 +163,8 @@ def read_test(idx):
 def delete_test(idx):
     """
         For tests call this in a separate process, idx start from 0
-        TODO: if write again will cause trouble?
-        """
+        _TODO: if write again will cause trouble? (No)
+    """
 
     # connect to server and get buffer
     MyBufferManager.register('get_buffer')
@@ -222,26 +223,26 @@ def main():
     buffer_server = ctx.Process(target=start_server)
     buffer_server.start()
 
-    # write -> 0
-    w_array0 = np.array([1, 2, 3, 4, 5])
-    writer0 = ctx.Process(target=write_test, args=(w_array0, buffer_lock))
-    writer0.start()
-
-    # write -> 1
-    w_array1 = np.array([[6, 6, 6, 6, 6], [7, 7, 7, 7, 7]])
+    # write -> element 0
+    w_array1 = np.array([1, 2, 3, 4, 5])
     writer1 = ctx.Process(target=write_test, args=(w_array1, buffer_lock))
     writer1.start()
 
+    # write -> element 1
+    w_array2 = np.array([[6, 6, 6, 6, 6], [7, 7, 7, 7, 7]])
+    writer2 = ctx.Process(target=write_test, args=(w_array2, buffer_lock))
+    writer2.start()
+
     # wait until finished
-    writer0.join()
     writer1.join()
+    writer2.join()
     print("[Main] Write two objects")
 
-    # read -> 1
+    # read -> element 1
     reader1 = ctx.Process(target=read_test, args=(1, ))
     reader1.start()
 
-    # read -> 0
+    # read -> element 0
     reader2 = ctx.Process(target=read_test, args=(0,))
     reader2.start()
 
@@ -250,17 +251,29 @@ def main():
     reader2.join()
     print("[Main] Read two objects")
 
-    # delete
+    # delete element 0 (element 1 -> new element 0)
     deleter = ctx.Process(target=delete_test, args=(0,))
     deleter.start()
     deleter.join()
     print("[Main] Delete block 0")
 
-    # read -> 0
+    # read -> new element 0
     reader3 = ctx.Process(target=read_test, args=(0,))
     reader3.start()
     reader3.join()
     print("[Main] Read after delete")
+
+    # rewrite and read
+    # write -> new element 1
+    w_array3 = np.array([[3, 3, 3, 3, 3], [1, 1, 1, 1, 1]])
+    writer3 = ctx.Process(target=write_test, args=(w_array3, buffer_lock))
+    writer3.start()
+    writer3.join()
+
+    # read -> new element 1
+    reader4 = ctx.Process(target=read_test, args=(1, ))
+    reader4.start()
+    reader4.join()
 
     # clean up
     unlink_shm()
