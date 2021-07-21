@@ -83,8 +83,8 @@ def main():
     # config
     plt = platform.platform()
     if "Windows" in plt:
-        shm_size = 8192 * 1024 * 1024
-        block_size = 512 * 1024 * 1024
+        shm_size = 2048 * 1024 * 1024
+        block_size = 128 * 1024 * 1024
     elif "Linux" in plt:
         shm_size = 100 * 1024 * 1024 * 1024
         block_size = 8 * 1024 * 1024

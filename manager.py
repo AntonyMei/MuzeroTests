@@ -2,15 +2,15 @@
 This file is used for testing multiprocessing manager
 """
 
-import os
 import multiprocessing as mp
+import os
+import platform
 import random
 import time
-from multiprocessing.managers import BaseManager
 from multiprocessing import Lock
+from multiprocessing.managers import BaseManager
+
 import numpy as np
-import math
-import platform
 
 reader_count = 2    # 16
 writer_count = 16    # 128
