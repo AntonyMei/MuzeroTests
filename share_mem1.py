@@ -2,19 +2,12 @@
 This file is used for testing shared memory
 """
 
-import os
-import multiprocessing as mp
-import random
-import time
-from multiprocessing.managers import BaseManager
+import platform
+import queue
 from multiprocessing import Lock
 from multiprocessing import shared_memory
 
-import numpy
 import numpy as np
-import math
-import platform
-import queue
 
 
 class MyBuffer:
@@ -141,7 +134,6 @@ def main():
     # delete
     shm = shared_memory.SharedMemory(name=shm_name)
     buffer.delete_item_config(0)
-    free_blocks = []
     free_blocks_queue = buffer.get_free_blocks()
     print("Delete block 1, free blocks\n", list(free_blocks_queue.queue))
     shm.close()
