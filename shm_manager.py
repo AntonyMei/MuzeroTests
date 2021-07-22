@@ -71,15 +71,10 @@ class MyBuffer:
     def shutdown(self):
         self.shm.unlink()
 
-    def get_free_blocks(self):
-        """
-        NEVER call this remotely, this function is only meant for internal use,
-        call get_free_block_idx instead
-        TODO: protect this function
-        """
-        return self.free_block_idx
-
     def get_free_blocks_list(self):
+        """
+        Note that return self.free_block_idx directly will cause pickle error and won't work
+        """
         return list(self.free_block_idx.queue)
 
 
