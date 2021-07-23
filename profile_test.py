@@ -1,5 +1,5 @@
 """
-This file is used for testing multiprocessing manager with shared memory
+    Profile test on shared memory manager (without lock)
 """
 
 import multiprocessing as mp
@@ -10,8 +10,20 @@ import time
 from multiprocessing import Lock
 from multiprocessing import shared_memory
 from multiprocessing.managers import BaseManager
-
 import numpy as np
+
+
+def profile(func):
+    from line_profiler import LineProfiler
+
+    def wrapper(*args, **kwargs):
+        lp = LineProfiler()
+        lp_wrapper = lp(func)
+        result = lp_wrapper(*args, **kwargs)
+        lp.print_stats()
+        return result
+
+    return wrapper
 
 
 class MyBuffer:
@@ -26,12 +38,12 @@ class MyBuffer:
 
         # initialize configurations
         self.block_size = block_size
-        self.write_lock = Lock()    # used for internal protection
+        self.write_lock = Lock()  # used for internal protection
         self.dtype_list = []
         self.shape_list = []
-        self.entry_head_list = []   # it contains which block the entry is mapped to
-        self.free_block_idx = queue.Queue(maxsize=int(memory_size/block_size))  # it contains the free blocks
-        for i in range(int(memory_size/block_size)):
+        self.entry_head_list = []  # it contains which block the entry is mapped to
+        self.free_block_idx = queue.Queue(maxsize=int(memory_size / block_size))  # it contains the free blocks
+        for i in range(int(memory_size / block_size)):
             self.free_block_idx.put(i)
 
     def get_block_offset(self, block_idx):
@@ -199,6 +211,7 @@ def unlink_shm():
     buffer.shutdown()
 
 
+@profile
 def main():
     """
     standard r/w procedure:
@@ -234,7 +247,7 @@ def main():
     print("[Main] Write two objects")
 
     # read -> element 1
-    reader1 = ctx.Process(target=read_test, args=(1, ))
+    reader1 = ctx.Process(target=read_test, args=(1,))
     reader1.start()
 
     # read -> element 0
@@ -266,7 +279,7 @@ def main():
     writer3.join()
 
     # read -> new element 1
-    reader4 = ctx.Process(target=read_test, args=(1, ))
+    reader4 = ctx.Process(target=read_test, args=(1,))
     reader4.start()
     reader4.join()
 

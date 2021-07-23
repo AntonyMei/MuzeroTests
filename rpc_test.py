@@ -28,10 +28,12 @@ class SharedMemoryBuffer(Buffer):
     # Writer
     def Put(self, segs):
 
+        """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         # Init
         # Wait for other writers and reader queue
         self.writer_lock.acquire()
         self.readwrite_lock.acquire()
+        """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
         # Writer starts here
 
@@ -54,13 +56,15 @@ class SharedMemoryBuffer(Buffer):
         print(f"writer: before {str(original_length)}, "
               f"write {str(len(segs))}, after {str(len(self.storage))}\n")
 
+        """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         # Clear
         self.readwrite_lock.release()
         self.writer_lock.release()
+        """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
     # Reader
     def Get(self, batch_size):
-
+        """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         # Init
         # Wait with the writers until chosen
         self.writer_lock.acquire()
@@ -72,7 +76,7 @@ class SharedMemoryBuffer(Buffer):
         self.reader_counter_lock.release()
         # Leaving critical region: reader_counter
         self.writer_lock.release()
-
+        """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         # Reader starts here
         samples = []
         deleted = 0
@@ -110,6 +114,7 @@ class SharedMemoryBuffer(Buffer):
         self.reader_lock.release()
         # Leaving critical region: sampling from buffer
 
+        """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         # Clear
         # Critical region: reader_counter
         self.reader_counter_lock.acquire()
@@ -118,6 +123,7 @@ class SharedMemoryBuffer(Buffer):
             self.readwrite_lock.release()
         self.reader_counter_lock.release()
         # Leaving critical region: reader_counter
+        """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
         # Return
         return samples
