@@ -9,6 +9,7 @@ import queue
 import time
 from multiprocessing import shared_memory
 from multiprocessing.managers import BaseManager
+import warnings
 
 import numpy as np
 
@@ -160,6 +161,7 @@ def start_server():
 def write_test(w_array, protocol: RPCProtocol):
     """
     For tests call this in a separate process
+    Write uses shm, therefore, registration is required
     """
 
     # connect to server and get buffer
@@ -194,7 +196,7 @@ def write_test(w_array, protocol: RPCProtocol):
             shm.close()
             print(f"[Writer] Process {os.getpid()} Write block\n {w_array}")
         except FileNotFoundError:
-            print(f"[Writer] Unable to open shm, retrying in 1 sec. {os.getpid()}")
+            print(f"[Writer] Unable to open shm. {os.getpid()}")
             time.sleep(1)
 
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -214,7 +216,9 @@ def write_test(w_array, protocol: RPCProtocol):
 def read_test(idx, protocol: RPCProtocol):
     """
     For tests call this in a separate process, idx start from 0
-    TODO: add reader-writer lock to avoid accidents
+    Read uses shm, therefore, registration is required
+
+    _TODO: add reader-writer lock to avoid accidents
     """
 
     # connect to server and get buffer
@@ -243,7 +247,7 @@ def read_test(idx, protocol: RPCProtocol):
 
     # read
     if idx >= buffer.get_block_count():
-        print(f"[Reader] Process {os.getpid()} Data deleted")
+        print(f"[Reader] Process {os.getpid()} Data required not available (deleted or index out of range)")
     else:
         try:
             shm = shared_memory.SharedMemory(name=buffer.get_shm_name())
@@ -253,7 +257,7 @@ def read_test(idx, protocol: RPCProtocol):
             print(f"[Reader] Process {os.getpid()} Read block {idx}\n {r_array}")
             shm.close()
         except FileNotFoundError:
-            print(f"[Reader] Unable to open shm, retrying in 1 sec. {os.getpid()}")
+            print(f"[Reader] Unable to open shm. {os.getpid()}")
             time.sleep(1)
 
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -275,8 +279,10 @@ def read_test(idx, protocol: RPCProtocol):
 
 def delete_test(idx, protocol: RPCProtocol):
     """
-        For tests call this in a separate process, idx start from 0
-        _TODO: if write again will cause trouble? (No)
+    For tests call this in a separate process, idx start from 0
+    Delete doesn't need shm, therefore, no need for registration (lazy delete)
+
+    _TODO: if write again will cause trouble? (No)
     """
 
     # connect to server and get buffer
@@ -300,14 +306,10 @@ def delete_test(idx, protocol: RPCProtocol):
 
     # delete
     if idx >= buffer.get_block_count():
-        print(f"[Deleter] Process {os.getpid()} Data deleted")
+        print(f"[Deleter] Process {os.getpid()} Data has already been deleted")
     else:
-        try:
-            buffer.delete_item_config(idx)
-            print(f"[Deleter] Process {os.getpid()} Delete block {idx}, free blocks\n {buffer.get_free_blocks_list()}")
-        except FileNotFoundError:
-            print(f"[Deleter] Unable to open shm, retrying in 1 sec. {os.getpid()}")
-            time.sleep(1)
+        buffer.delete_item_config(idx)
+        print(f"[Deleter] Process {os.getpid()} Delete block {idx}, free blocks\n {buffer.get_free_blocks_list()}")
 
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # leave
