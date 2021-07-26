@@ -45,7 +45,10 @@ class MyBuffer:
         self.reader_count = 0
 
         # Used for safe exit on linux
-        self.remaining_shm_link_count = remaining_shm_link_count
+        self.remaining_shm_link_count = 0
+        self.exit_flag = False
+
+    # buffer
 
     def get_block_count(self):
         return len(self.entry_head_list)
@@ -96,6 +99,8 @@ class MyBuffer:
         """
         return list(self.free_block_idx.queue)
 
+    # rpc protocol
+
     def get_reader_count(self):
         return self.reader_count
 
@@ -104,6 +109,23 @@ class MyBuffer:
 
     def decrease_reader(self):
         self.reader_count -= 1
+
+    # linux sync
+    def register_worker(self):
+        self.remaining_shm_link_count += 1
+
+    def unregister_worker(self):
+        self.remaining_shm_link_count -= 1
+        assert self.remaining_shm_link_count >= 0
+
+    def get_remaining_worker(self):
+        return self.remaining_shm_link_count
+
+    def set_exit_flag(self):
+        self.exit_flag = True
+
+    def get_exit_flag(self):
+        return self.exit_flag
 
 
 class RPCProtocol:
@@ -181,6 +203,13 @@ def write_test(w_array, protocol: RPCProtocol):
     protocol.writer_lock.release()
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
+    # signal main process that this worker has finished and wait for exit permission
+    buffer.unregister_worker()
+    while not buffer.get_exit_flag():
+        time.sleep(1)
+        print(f"[Writer] Process {os.getpid()} waiting for exit permission")
+    print(f"[Writer] Process {os.getpid()} exit")
+
 
 def read_test(idx, protocol: RPCProtocol):
     """
@@ -235,6 +264,13 @@ def read_test(idx, protocol: RPCProtocol):
         protocol.readwrite_lock.release()
     protocol.reader_counter_lock.release()
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+    # signal main process that this worker has finished and wait for exit permission
+    buffer.unregister_worker()
+    while not buffer.get_exit_flag():
+        time.sleep(1)
+        print(f"[Reader] Process {os.getpid()} waiting for exit permission")
+    print(f"[Reader] Process {os.getpid()} exit")
 
 
 def delete_test(idx, protocol: RPCProtocol):
@@ -304,7 +340,7 @@ def main():
     cleanup: call shutdown to unlink
     """
 
-    # get multiprocessing context and start server
+    # get multiprocessing context and start server for buffer
     if platform.system() == 'Windows':
         ctx = mp.get_context('spawn')
     elif platform.system() == 'Linux':
@@ -317,29 +353,47 @@ def main():
     buffer_server.start()
     workers = []
 
+    # get buffer for registration
+    MyBufferManager.register('get_buffer')
+    m = MyBufferManager(address=('localhost', 12333), authkey=b'antony')
+    connected = False
+    while not connected:
+        try:
+            m.connect()
+            connected = True
+        except ConnectionRefusedError:
+            print('[Main] Server not ready, retrying in 1 sec.', os.getpid())
+            time.sleep(1)
+    buffer = m.get_buffer()
+
     # write -> element 0
     w_array1 = np.array([1, 2, 3, 4, 5])
     writer1 = ctx.Process(target=write_test, args=(w_array1, protocol, ))
     workers.append(writer1)
+    buffer.register_worker()
     writer1.start()
 
     # write -> element 1
     w_array2 = np.array([[6, 6, 6, 6, 6], [7, 7, 7, 7, 7]])
     writer2 = ctx.Process(target=write_test, args=(w_array2, protocol, ))
     workers.append(writer2)
+    buffer.register_worker()
     writer2.start()
 
     # read -> element 1
     reader1 = ctx.Process(target=read_test, args=(1, protocol, ))
     workers.append(reader1)
+    buffer.register_worker()
     reader1.start()
 
     # read -> element 0
     reader2 = ctx.Process(target=read_test, args=(0, protocol, ))
     workers.append(reader2)
+    buffer.register_worker()
     reader2.start()
 
     # delete element 0 (element 1 -> new element 0)
+    # delete does not open shm, no need for registration
     deleter = ctx.Process(target=delete_test, args=(0, protocol, ))
     workers.append(deleter)
     deleter.start()
@@ -347,23 +401,32 @@ def main():
     # read -> new element 0
     reader3 = ctx.Process(target=read_test, args=(0, protocol, ))
     workers.append(reader3)
+    buffer.register_worker()
     reader3.start()
 
     # write -> new element 1
     w_array3 = np.array([[3, 3, 3, 3, 3], [1, 1, 1, 1, 1]])
     writer3 = ctx.Process(target=write_test, args=(w_array3, protocol, ))
     workers.append(writer3)
+    buffer.register_worker()
     writer3.start()
 
     # read -> new element 1
     reader4 = ctx.Process(target=read_test, args=(1, protocol, ))
     workers.append(reader4)
+    buffer.register_worker()
     reader4.start()
 
     # clean up
+    print(f"[Main] All workers have been launched")
+    while not buffer.get_remaining_worker() == 0:
+        time.sleep(1)
+        print(f"[Main] Waiting for workers to complete, remaining workers {buffer.get_remaining_worker()}")
+    print(f"[Main] All workers have completed, unlink shm and signal exit")
+    unlink_shm()  # make sure shared memory is unlinked after termination of all workers
+    buffer.set_exit_flag()
     [worker.join() for worker in workers]
     print("********************************************************************************")
-    unlink_shm()    # make sure shared memory is unlinked after termination of all workers
     buffer_server.terminate()
 
 
