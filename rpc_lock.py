@@ -53,7 +53,7 @@ def main():
         print('OS not supported')
         assert False
     protocol = RPCProtocol()
-    lock = mp.Lock()
+    lock = ctx.Lock()
     workers = []
 
     # write -> element 0

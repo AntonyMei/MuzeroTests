@@ -128,13 +128,13 @@ class MyBuffer:
 
 class RPCProtocol:
 
-    def __init__(self):
+    def __init__(self, ctx):
         """
         This class represents reader-writer RPC protocol. This implementation is a balanced
         """
-        self.reader_counter_lock = mp.Lock()
-        self.writer_lock = mp.Lock()
-        self.readwrite_lock = mp.Lock()
+        self.reader_counter_lock = ctx.Lock()
+        self.writer_lock = ctx.Lock()
+        self.readwrite_lock = ctx.Lock()
 
 
 class MyBufferManager(BaseManager):
@@ -345,7 +345,7 @@ def main():
     else:
         print('OS not supported')
         assert False
-    protocol = RPCProtocol()
+    protocol = RPCProtocol(ctx=ctx)
     buffer_server = ctx.Process(target=start_server)
     buffer_server.start()
     workers = []
