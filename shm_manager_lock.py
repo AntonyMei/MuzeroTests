@@ -1,17 +1,14 @@
 """
 This file is used for testing multiprocessing manager with shared memory
 """
-import multiprocessing
-import multiprocessing as mp
 import os
 import platform
 import queue
 import time
-from multiprocessing import shared_memory
-from multiprocessing.managers import BaseManager
-import warnings
 
 import numpy as np
+import multiprocessing as mp
+from multiprocessing.managers import BaseManager
 
 
 class MyBuffer:
@@ -30,16 +27,16 @@ class MyBuffer:
         it that way.
         """
         # prepare shared memory and related configurations
-        self.shm = shared_memory.SharedMemory(create=True, size=memory_size, name="MyShm")
+        self.shm = mp.shared_memory.SharedMemory(create=True, size=memory_size, name="MyShm")
         self.shm_name = self.shm.name
         self.block_size = block_size
 
         # initialize data description storage
         self.dtype_list = []
         self.shape_list = []
-        self.entry_head_list = []   # it contains which block the entry is mapped to
-        self.free_block_idx = queue.Queue(maxsize=int(memory_size/block_size))  # it contains the free blocks
-        for i in range(int(memory_size/block_size)):
+        self.entry_head_list = []  # it contains which block the entry is mapped to
+        self.free_block_idx = queue.Queue(maxsize=int(memory_size / block_size))  # it contains the free blocks
+        for i in range(int(memory_size / block_size)):
             self.free_block_idx.put(i)
 
         # reader-writer protocol
@@ -135,9 +132,9 @@ class RPCProtocol:
         """
         This class represents reader-writer RPC protocol. This implementation is a balanced
         """
-        self.reader_counter_lock = multiprocessing.Lock()
-        self.writer_lock = multiprocessing.Lock()
-        self.readwrite_lock = multiprocessing.Lock()
+        self.reader_counter_lock = mp.Lock()
+        self.writer_lock = mp.Lock()
+        self.readwrite_lock = mp.Lock()
 
 
 class MyBufferManager(BaseManager):
@@ -188,7 +185,7 @@ def write_test(w_array, protocol: RPCProtocol):
         print(f"[Writer] Process {os.getpid()} Buffer full")
     else:
         try:
-            shm = shared_memory.SharedMemory(name=buffer.get_shm_name())
+            shm = mp.shared_memory.SharedMemory(name=buffer.get_shm_name())
             block_idx = buffer.append_item_config(w_array.shape, w_array.dtype)
             block_offset = buffer.get_block_offset(block_idx)
             mm_array = np.ndarray(shape=w_array.shape, dtype=w_array.dtype, buffer=shm.buf, offset=block_offset)
@@ -197,7 +194,6 @@ def write_test(w_array, protocol: RPCProtocol):
             print(f"[Writer] Process {os.getpid()} Write block\n {w_array}")
         except FileNotFoundError:
             print(f"[Writer] Unable to open shm. {os.getpid()}")
-            time.sleep(1)
 
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # leave
@@ -208,8 +204,8 @@ def write_test(w_array, protocol: RPCProtocol):
     # signal main process that this worker has finished and wait for exit permission
     buffer.unregister_worker()
     while not buffer.get_exit_flag():
-        time.sleep(1)
         print(f"[Writer] Process {os.getpid()} waiting for exit permission")
+        time.sleep(1)
     print(f"[Writer] Process {os.getpid()} exit")
 
 
@@ -250,7 +246,7 @@ def read_test(idx, protocol: RPCProtocol):
         print(f"[Reader] Process {os.getpid()} Data required not available (deleted or index out of range)")
     else:
         try:
-            shm = shared_memory.SharedMemory(name=buffer.get_shm_name())
+            shm = mp.shared_memory.SharedMemory(name=buffer.get_shm_name())
             r_dtype, r_shape, r_block_idx = buffer.read_item_config(idx)
             r_offset = buffer.get_block_offset(r_block_idx)
             r_array = np.ndarray(shape=r_shape, dtype=r_dtype, buffer=shm.buf, offset=r_offset)
@@ -258,7 +254,6 @@ def read_test(idx, protocol: RPCProtocol):
             shm.close()
         except FileNotFoundError:
             print(f"[Reader] Unable to open shm. {os.getpid()}")
-            time.sleep(1)
 
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # leave
@@ -272,8 +267,8 @@ def read_test(idx, protocol: RPCProtocol):
     # signal main process that this worker has finished and wait for exit permission
     buffer.unregister_worker()
     while not buffer.get_exit_flag():
-        time.sleep(1)
         print(f"[Reader] Process {os.getpid()} waiting for exit permission")
+        time.sleep(1)
     print(f"[Reader] Process {os.getpid()} exit")
 
 
@@ -346,7 +341,7 @@ def main():
     if platform.system() == 'Windows':
         ctx = mp.get_context('spawn')
     elif platform.system() == 'Linux':
-        ctx = mp.get_context('fork')
+        ctx = mp.get_context('spawn')   # CUDA only supports spawn
     else:
         print('OS not supported')
         assert False
@@ -370,51 +365,51 @@ def main():
 
     # write -> element 0
     w_array1 = np.array([1, 2, 3, 4, 5])
-    writer1 = ctx.Process(target=write_test, args=(w_array1, protocol, ))
+    writer1 = ctx.Process(target=write_test, args=(w_array1, protocol,))
     workers.append(writer1)
     buffer.register_worker()
     writer1.start()
 
     # write -> element 1
     w_array2 = np.array([[6, 6, 6, 6, 6], [7, 7, 7, 7, 7]])
-    writer2 = ctx.Process(target=write_test, args=(w_array2, protocol, ))
+    writer2 = ctx.Process(target=write_test, args=(w_array2, protocol,))
     workers.append(writer2)
     buffer.register_worker()
     writer2.start()
 
     # read -> element 1
-    reader1 = ctx.Process(target=read_test, args=(1, protocol, ))
+    reader1 = ctx.Process(target=read_test, args=(1, protocol,))
     workers.append(reader1)
     buffer.register_worker()
     reader1.start()
 
     # read -> element 0
-    reader2 = ctx.Process(target=read_test, args=(0, protocol, ))
+    reader2 = ctx.Process(target=read_test, args=(0, protocol,))
     workers.append(reader2)
     buffer.register_worker()
     reader2.start()
 
     # delete element 0 (element 1 -> new element 0)
     # delete does not open shm, no need for registration
-    deleter = ctx.Process(target=delete_test, args=(0, protocol, ))
+    deleter = ctx.Process(target=delete_test, args=(0, protocol,))
     workers.append(deleter)
     deleter.start()
 
     # read -> new element 0
-    reader3 = ctx.Process(target=read_test, args=(0, protocol, ))
+    reader3 = ctx.Process(target=read_test, args=(0, protocol,))
     workers.append(reader3)
     buffer.register_worker()
     reader3.start()
 
     # write -> new element 1
     w_array3 = np.array([[3, 3, 3, 3, 3], [1, 1, 1, 1, 1]])
-    writer3 = ctx.Process(target=write_test, args=(w_array3, protocol, ))
+    writer3 = ctx.Process(target=write_test, args=(w_array3, protocol,))
     workers.append(writer3)
     buffer.register_worker()
     writer3.start()
 
     # read -> new element 1
-    reader4 = ctx.Process(target=read_test, args=(1, protocol, ))
+    reader4 = ctx.Process(target=read_test, args=(1, protocol,))
     workers.append(reader4)
     buffer.register_worker()
     reader4.start()
