@@ -19,11 +19,12 @@ def client_func(rank):
     socket.connect("tcp://localhost:5559")
     log2terminal(worker_type="Client", worker_id=rank, msg=f"Client {rank} starts.")
 
-    #  Do 10 requests, waiting each time for a response
-    for request in range(1, 5):
-        socket.send(bytes(f"Hello from client {rank}", encoding='utf8'))
-        message = socket.recv()
-        log2terminal(worker_type="Client", worker_id=rank, msg=f"Received reply {request} [{message}]")
+    #  Do 5 requests, waiting each time for a response
+    for request in range(5):
+        socket.send(bytes(f"Client {rank}, msg {request}", encoding='utf8'))
+        log2terminal(worker_type="Client", worker_id=rank, msg=f"Send request {request}")
+        socket.recv()
+        time.sleep(0.2)
 
 
 def server_func(rank):
@@ -36,7 +37,7 @@ def server_func(rank):
     while True:
         message = socket.recv()
         log2terminal(worker_type="Server", worker_id=rank, msg=f"Received request: {message}")
-        socket.send(bytes(f"World from server {rank}", encoding='utf8'))
+        socket.send(b"123")
 
 
 def broker_func():
