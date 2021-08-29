@@ -32,3 +32,4 @@ if __name__ == '__main__':
         timer += (e_time - s_time)
         print(f"iter {i}: time {e_time - s_time}")
     print(f"avg write time: {timer/repeat}")
+    print(f"avg speed: {(entry_size * 8 / (1024 * 1024)) / (timer / repeat)} MB/s")

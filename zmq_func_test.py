@@ -1,5 +1,5 @@
 """
-This file is used for testing zmq queue functionality
+This file is used for testing zmq queue basic functionality
 """
 import time
 
