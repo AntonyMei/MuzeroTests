@@ -63,13 +63,24 @@ def broker_func():
 def main():
 
     ctx = mp.get_context('spawn')
+
+    # broker
     broker = ctx.Process(target=broker_func)
     broker.start()
+
+    # servers
     server_list = [ctx.Process(target=server_func, args=(i, )) for i in range(32)]
     [server.start() for server in server_list]
+
+    # clients
     time.sleep(1)
     client_list = [ctx.Process(target=client_func, args=(i, )) for i in range(64)]
     [client.start() for client in client_list]
+
+    # clean up
+    [client.join() for client in client_list]
+    [server.terminate() for server in server_list]
+    broker.terminate()
 
 
 if __name__ == '__main__':
