@@ -1,5 +1,5 @@
 import torch
-
+import numpy as np
 
 def profile(func):
     from line_profiler import LineProfiler
