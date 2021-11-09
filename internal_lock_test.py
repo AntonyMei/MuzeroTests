@@ -5,6 +5,7 @@ This file is used for testing multiprocessing manager
 import multiprocessing as mp
 import os
 import platform
+import queue
 import random
 import time
 from multiprocessing import Lock
@@ -12,30 +13,39 @@ from multiprocessing.managers import BaseManager
 
 import numpy as np
 
-reader_count = 2    # 16
-writer_count = 16    # 128
-entry_size = 40*1024*1024
+reader_count = 4    # 16
+writer_count = 4    # 128
+item_count = 10
 
 
 class Buffer:
     def __init__(self):
-        self.list = []
+        self.queue = queue.Queue()
+        self.lock = Lock()
 
     def get_length(self):
         return len(self.list)
 
-    def get(self, idx):
-        return self.list[idx]
+    def get(self):
+        self.lock.acquire()
+        try:
+            item = self.queue.get(block=False)
+        except queue.Empty:
+            item = None
+        self.lock.release()
+        return item
 
-    def set(self, game):
-        self.list.append(game)
+    def set(self, item):
+        self.lock.acquire()
+        self.queue.put(item)
+        self.lock.release()
 
 
 class BufferManager(BaseManager):
     pass
 
 
-def writer_proc(lock: Lock(), idx):
+def writer_proc(idx):
     """
     400MB each, call write 10 times
     """
@@ -51,23 +61,14 @@ def writer_proc(lock: Lock(), idx):
         except ConnectionRefusedError:
             print('Server not ready, retrying in 1 sec.', os.getpid())
             time.sleep(1)
-    obj = m.get_buffer()
+    buffer = m.get_buffer()
 
     # generate some data and feed into buffer
-    for iteration in range(10):
-        # do some work
-        game = np.ones(entry_size)
-        for i in range(int(0.01 * entry_size)):
-            game[random.randint(0, entry_size - 1)] = random.random()
-        # set into buffer
-        print('writer start iter:', iteration, 'writer id', idx, os.getpid())
-        lock.acquire()
-        s_time = time.time()
-        obj.set(game)
-        e_time = time.time()
-        lock.release()
-        print('writer finished iter:', iteration, 'writer id', idx, os.getpid())
-        print('writer', e_time - s_time)
+    for i in range(item_count):
+        start = time.time()
+        buffer.set(idx * item_count + i)
+        end = time.time()
+        print(f"[Writer {os.getpid()}] put {idx * item_count + i}, delay {int((end - start) * 1000)}.")
 
 
 def reader_proc(idx):
@@ -83,26 +84,19 @@ def reader_proc(idx):
         except ConnectionRefusedError:
             print('Server not ready, retrying in 1 sec.', os.getpid())
             time.sleep(1)
-    obj = m.get_buffer()
+    buffer = m.get_buffer()
 
     # read some data
-    for iteration in range(10):
-        print('reader start iter:', iteration, 'reader id', idx, os.getpid())
-        length = obj.get_length()
-        pos = random.randint(0, length)
-        s_time = time.time()
-        array = obj.get(pos - 1)
-        e_time = time.time()
-        print(np.sum(array))
-        print('reader finished iter:', iteration, 'reader id', idx, os.getpid())
-        print('reader', e_time - s_time)
+    for i in range(item_count):
+        start = time.time()
+        item = buffer.get(idx * item_count + i)
+        end = time.time()
+        print(f"[Reader {os.getpid()}] get {item}, delay {int((end - start) * 1000)}.")
 
 
 def start_server():
     # start server
     buffer = Buffer()
-    game = np.ones(entry_size)
-    buffer.set(game)
     BufferManager.register('get_buffer', callable=lambda: buffer)
     print('server registered')
     manager = BufferManager(address=('localhost', 12333), authkey=b'antony')
@@ -121,14 +115,13 @@ if __name__ == '__main__':
     else:
         print('OS not supported')
         assert False
-    buffer_lock = Lock()
 
     # start process
     server_proc = ctx.Process(target=start_server)
     server_proc.start()
 
     # start workers
-    w_workers = [ctx.Process(target=writer_proc, args=(buffer_lock, i, )) for i in range(writer_count)]
+    w_workers = [ctx.Process(target=writer_proc, args=(i, )) for i in range(writer_count)]
     r_workers = [ctx.Process(target=reader_proc, args=(i, )) for i in range(reader_count)]
     start_time = time.time()
     [worker.start() for worker in w_workers]
