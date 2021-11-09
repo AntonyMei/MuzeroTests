@@ -18,33 +18,50 @@ writer_count = 4    # 128
 item_count = 10
 
 
+class SyncProtocol:
+
+    def __init__(self, ctx):
+        """ This class represents reader-writer synchronization protocol.
+
+        ctx must be the same context in which the workers are spawned, otherwise acquiring lock will
+        always block.
+
+        :param ctx: multiprocessing context in which the locks will be created
+
+        """
+        self.reader_counter_lock = ctx.Lock()
+        self.writer_lock = ctx.Lock()
+        self.readwrite_lock = ctx.Lock()
+        self.reader_count = 0
+
+    def enter(self):
+        self.writer_lock.acquire()
+
+    def leave(self):
+        self.writer_lock.release()
+
+
 class Buffer:
     def __init__(self, context):
         self.queue = queue.Queue()
-        self.lock = context.Lock()
-
-    def enter(self):
-        self.lock.acquire()
-
-    def leave(self):
-        self.lock.release()
+        self.protocol = SyncProtocol(context)
 
     def get_length(self):
         return len(self.list)
 
     def get(self):
-        self.enter()
+        self.protocol.enter()
         try:
             item = self.queue.get(block=False)
         except queue.Empty:
             item = None
-        self.leave()
+        self.protocol.leave()
         return item
 
     def set(self, item):
-        self.lock.acquire()
+        self.protocol.enter()
         self.queue.put(item)
-        self.lock.release()
+        self.protocol.leave()
 
 
 class BufferManager(BaseManager):
@@ -74,8 +91,9 @@ def writer_proc(idx):
         start = time.time()
         buffer.set(idx * item_count + i)
         end = time.time()
-        print(f"[Writer {os.getpid()}] put {idx * item_count + i}, delay {int((end - start) * 1000)}ms, "
-              f"at time {int(start * 10000) % 1000}.", flush=True)
+        # print(f"[Writer {os.getpid()}] put {idx * item_count + i}, delay {int((end - start) * 1000)}ms, "
+        #       f"at time {int(start * 10000) % 1000}.", flush=True)
+        print(f"w {idx * item_count + i}")
         time.sleep(random.random() * 0.1)
 
 
@@ -100,8 +118,9 @@ def reader_proc(idx):
         start = time.time()
         item = buffer.get()
         end = time.time()
-        print(f"[Reader {os.getpid()}] get {item}, delay {int((end - start) * 1000)}ms, "
-              f"at time {int(start * 10000) % 1000}.", flush=True)
+        # print(f"[Reader {os.getpid()}] get {item}, delay {int((end - start) * 1000)}ms, "
+        #       f"at time {int(start * 10000) % 1000}.", flush=True)
+        print(f"r {item}")
         time.sleep(random.random() * 0.1)
 
 
