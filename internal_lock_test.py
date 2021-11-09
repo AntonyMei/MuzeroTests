@@ -19,9 +19,9 @@ item_count = 10
 
 
 class Buffer:
-    def __init__(self):
+    def __init__(self, context):
         self.queue = queue.Queue()
-        self.lock = Lock()
+        self.lock = context.Lock()
 
     def get_length(self):
         return len(self.list)
@@ -68,7 +68,10 @@ def writer_proc(idx):
         start = time.time()
         buffer.set(idx * item_count + i)
         end = time.time()
-        print(f"[Writer {os.getpid()}] put {idx * item_count + i}, delay {int((end - start) * 1000)}.")
+        print(f"[Writer {os.getpid()}] put {idx * item_count + i}, delay {int((end - start) * 1000)}ms, "
+              f"at time {int(start * 10000) % 1000}.", flush=True)
+        time.sleep(random.random() * 0.1)
+
 
 
 def reader_proc(idx):
@@ -89,14 +92,16 @@ def reader_proc(idx):
     # read some data
     for i in range(item_count):
         start = time.time()
-        item = buffer.get(idx * item_count + i)
+        item = buffer.get()
         end = time.time()
-        print(f"[Reader {os.getpid()}] get {item}, delay {int((end - start) * 1000)}.")
+        print(f"[Reader {os.getpid()}] get {item}, delay {int((end - start) * 1000)}ms, "
+              f"at time {int(start * 10000) % 1000}.", flush=True)
+        time.sleep(random.random() * 0.1)
 
 
-def start_server():
+def start_server(context):
     # start server
-    buffer = Buffer()
+    buffer = Buffer(context)
     BufferManager.register('get_buffer', callable=lambda: buffer)
     print('server registered')
     manager = BufferManager(address=('localhost', 12333), authkey=b'antony')
@@ -117,7 +122,7 @@ if __name__ == '__main__':
         assert False
 
     # start process
-    server_proc = ctx.Process(target=start_server)
+    server_proc = ctx.Process(target=start_server, args=(ctx, ))
     server_proc.start()
 
     # start workers
@@ -125,6 +130,7 @@ if __name__ == '__main__':
     r_workers = [ctx.Process(target=reader_proc, args=(i, )) for i in range(reader_count)]
     start_time = time.time()
     [worker.start() for worker in w_workers]
+    time.sleep(0.1)
     [worker.start() for worker in r_workers]
     [worker.join() for worker in w_workers]
     [worker.join() for worker in r_workers]
