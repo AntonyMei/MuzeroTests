@@ -23,16 +23,22 @@ class Buffer:
         self.queue = queue.Queue()
         self.lock = context.Lock()
 
+    def enter(self):
+        self.lock.acquire()
+
+    def leave(self):
+        self.lock.release()
+
     def get_length(self):
         return len(self.list)
 
     def get(self):
-        self.lock.acquire()
+        self.enter()
         try:
             item = self.queue.get(block=False)
         except queue.Empty:
             item = None
-        self.lock.release()
+        self.leave()
         return item
 
     def set(self, item):
