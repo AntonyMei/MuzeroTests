@@ -9,7 +9,7 @@ def main():
     #  Socket to talk to server
     print("Connecting to hello world server")
     socket = context.socket(zmq.PULL)
-    socket.connect("tcp://10.200.3.112:10003")
+    socket.bind("tcp://10.200.3.112:11111")
 
     start = time.time()
     counter = 0
