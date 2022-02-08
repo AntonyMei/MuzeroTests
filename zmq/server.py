@@ -1,19 +1,17 @@
 import time
+import numpy as np
 import zmq
 import pickle
 
-
-class Node:
-    def __init__(self):
-        self.a = 1
-        self.b = 2
-
-
 context = zmq.Context()
-socket = context.socket(zmq.PUB)
-socket.bind("tcp://*:5000")
+socket = context.socket(zmq.PUSH)
+socket.bind("tcp://10.200.13.18:10010")
 
+message = np.ones(10 * (1024 ** 2))
+data_stream = pickle.dumps(message)
+counter = 0
 while True:
     #  Wait for next request from client
-    message = input()
-    socket.send_string(message)
+    # message = input()
+    socket.send(data_stream)
+    print(f"sent {len(data_stream)}")
