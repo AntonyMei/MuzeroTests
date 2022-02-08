@@ -9,18 +9,18 @@ def main():
     #  Socket to talk to server
     print("Connecting to hello world server")
     socket = context.socket(zmq.PULL)
-    socket.connect("tcp://10.200.3.112:10010")
+    socket.connect("tcp://10.200.3.112:10003")
 
     start = time.time()
     counter = 0
     while True:
         counter += 1
         string = socket.recv()
-        if counter == 50:
+        if counter == 1000:
             break
         print(counter)
     end = time.time()
-    print((50 * 80) / (end - start))
+    print((1000 * 80) / (end - start))
 
 
 if __name__ == '__main__':

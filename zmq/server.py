@@ -5,7 +5,7 @@ import pickle
 
 context = zmq.Context()
 socket = context.socket(zmq.PUSH)
-socket.bind("tcp://*:5000")
+socket.bind("tcp://*:5001")
 
 message = np.ones(10 * (1024 ** 2))
 data_stream = pickle.dumps(message)
