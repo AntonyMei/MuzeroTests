@@ -11,7 +11,6 @@ def main():
     socket = context.socket(zmq.PULL)
     socket.connect("tcp://10.200.13.18:10010")
 
-    #  Do 10 requests, waiting each time for a response
     start = time.time()
     counter = 0
     while True:
@@ -21,7 +20,7 @@ def main():
             break
         print(counter)
     end = time.time()
-    print(50 * 80 / (end - start))
+    print((50 * 80) / (end - start))
 
 
 if __name__ == '__main__':
